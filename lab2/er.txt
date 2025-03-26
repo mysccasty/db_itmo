@@ -1,0 +1,51 @@
+@startuml
+hide circle
+skinparam linetype ortho
+
+entity "Пользователь" as user {
+  id : BIGSERIAL
+  --
+  username : VARCHAR(50)
+  email : VARCHAR(255)
+  phone : VARCHAR(20)
+  password_hash : VARCHAR(255)
+  first_name : VARCHAR(100)
+  last_name : VARCHAR(100)
+  status : VARCHAR(20)
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+  avatar_id : BIGINT <<FK>>
+}
+
+
+entity "Пост" as post {
+  id : BIGINT
+  --
+  user_id : BIGINT <<FK>>
+  description : TEXT
+  status : VARCHAR(20)
+  created_at : TIMESTAMPTZ
+  updated_at : TIMESTAMPTZ
+}
+
+entity "Хештег" as hashtag {
+  id : BIGSERIAL <<PK>>
+  --
+  slug : VARCHAR(50)
+}
+
+entity "Файл" as file {
+  id : BIGSERIAL <<PK>>
+  --
+  type : VARCHAR(50)
+  path : VARCHAR(255)
+  filename : VARCHAR(255)
+  uploaded_at : TIMESTAMPTZ
+}
+
+' Связи
+user ||--o{ post
+user }o--o| file
+post }|--o{ hashtag
+post }o--o{ file
+@enduml
