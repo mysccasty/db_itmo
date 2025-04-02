@@ -16,8 +16,6 @@ entity "Пользователь" as user {
   updated_at : TIMESTAMPTZ
   avatar_id : BIGINT <<FK>>
 }
-
-
 entity "Пост" as post {
   id : BIGINT
   --
@@ -27,13 +25,14 @@ entity "Пост" as post {
   created_at : TIMESTAMPTZ
   updated_at : TIMESTAMPTZ
 }
-
+entity "ПостХэштег" as post_hashtags {
+  PRIMARY_KEY(post_id, hashtag_id)
+}
 entity "Хештег" as hashtag {
   id : BIGSERIAL <<PK>>
   --
   slug : VARCHAR(50)
 }
-
 entity "Файл" as file {
   id : BIGSERIAL <<PK>>
   --
@@ -42,10 +41,17 @@ entity "Файл" as file {
   filename : VARCHAR(255)
   uploaded_at : TIMESTAMPTZ
 }
+entity "ПостФайл" as post_files {
+  PRIMARY_KEY(post_id, file_id)
+}
 
 ' Связи
+
 user ||--o{ post
-user }o--o| file
-post }|--o{ hashtag
-post }o--o{ file
+user }|--|| file
+post ||--o{ post_hashtags
+hashtag ||--o{ post_hashtags
+post ||--o{ post_files
+file ||--o{ post_files
+
 @enduml
