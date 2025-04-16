@@ -76,19 +76,64 @@ FOR EACH ROW EXECUTE FUNCTION check_post_limit_per_hour();
 CREATE OR REPLACE FUNCTION check_post_files_on_publish()
 RETURNS TRIGGER AS $$
 DECLARE
-    file_count INTEGER;
+    file_count INTEGER := 0;
 BEGIN
     IF NEW.status = 'published' THEN
-        SELECT COUNT(*) INTO file_count FROM post_files WHERE post_id = NEW.id;
+        IF TG_OP = 'UPDATE' THEN
+            SELECT COUNT(*) INTO file_count FROM post_files WHERE post_id = NEW.id;
+        END IF;        
         IF file_count = 0 AND (NEW.description IS NULL OR LENGTH(TRIM(NEW.description)) = 0) THEN
-            RAISE EXCEPTION 'Cannot publish an empty post';
+            RAISE EXCEPTION 'Cannot publish an empty post (no files and empty description)';
         END IF;
     END IF;
-
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_check_empty_post_on_insert
+BEFORE INSERT ON posts
+FOR EACH ROW
+EXECUTE FUNCTION check_post_files_on_publish();
 
+CREATE TRIGGER trg_check_empty_post_on_update
+BEFORE UPDATE ON posts
+FOR EACH ROW
+EXECUTE FUNCTION check_post_files_on_publish();
+```
+### Запрет на удаление файлов, если пост таким образом окажется пуст
+```sql
+CREATE OR REPLACE FUNCTION check_post_files_on_delete()
+RETURNS TRIGGER AS $$
+DECLARE
+    post_status TEXT;
+    remaining_files INTEGER;
+BEGIN
+    SELECT status INTO post_status FROM posts WHERE id = OLD.post_id;
+    
+    IF post_status = 'published' THEN
+        SELECT COUNT(*) INTO remaining_files 
+        FROM post_files 
+        WHERE post_id = OLD.post_id AND file_id != OLD.file_id;
+        
+        IF remaining_files = 0 THEN
+            PERFORM 1 FROM posts 
+            WHERE id = OLD.post_id 
+            AND description IS NOT NULL 
+            AND LENGTH(TRIM(description)) > 0;
+            
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'Cannot delete last file from published post without description';
+            END IF;
+        END IF;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_check_post_files_on_delete
+BEFORE DELETE ON post_files
+FOR EACH ROW
+EXECUTE FUNCTION check_post_files_on_delete();
 ```
 ---
 ## Функции 
@@ -188,7 +233,7 @@ BEGIN;
 
 SELECT id FROM users WHERE id = 2 AND status = 'active' FOR UPDATE;
 
-CALL ban_user_and_archive_posts(5);
+CALL ban_user_and_archive_posts(2);
 
 COMMIT;
 ```
@@ -200,8 +245,7 @@ DO $$
 BEGIN
     PERFORM set_user_avatar(1, 4);
 EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'ERROR: %', SQLERRM;
-    ROLLBACK;
+    RAISE EXCEPTION 'Failed to set user avatar: %', SQLERRM;
 END $$;
 
 COMMIT;
